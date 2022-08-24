@@ -1,0 +1,142 @@
+== Download and install the Raspberry Pi Imager
+https://www.raspberrypi.com/software/
+
+Ubuntu: https://downloads.raspberrypi.org/imager/imager_latest_amd64.deb
+
+Windows: https://downloads.raspberrypi.org/imager/imager_latest.exe
+
+=== Run the Raspberry Pi Imager
+Then click "CHOOSE OS" under Operating System then "use custom" then select the `ubuntu-20.04.4-preinstalled-server-arm64+raspi.img.xz`
+Then click "CHOOSE STORAGE" under Storage and then "Internal SD card reader"
+Click "WRITE" enter your password if it promts you.
+
+Profit
+
+After writing is compleate, mount it and edit its /etc/hostname & /etc/hosts files
+
+=== @NOTE where it is `#` please put the appropriate number
+== Edit `/etc/hostname`
+edit to just
+`dragonfly#`
+
+== Edit `/etc/hosts`
+just below localhost paste
+`127.0.1.1 dragonfly#`
+
+== Boot the pi up and change the password(will prompt you to do it on login),
+
+= On the laptop/desktop
+
+== Install ansible
+
+== Copy over your public ssh key
+from the laptops `.ssh/id_rsa.pub`
+insert into `.ssh/authorized_keys`
+or just run `ssh-copy-id ubuntu@dragonfly's_ip`
+or just run `ssh-copy-id ubuntu@dragonfly#.local`
+
+@Note `dragonfly#.local` might resolve
+
+== Run the playbook from the dragonfly-controller/scripts directory
+`ansible-playbook playbook.yaml -u ubuntu --inventory ./inventory`
+
+@Note if you are getting this error below it is probably because unattended upgrades are in progress, so just wait a few minutes and run it again.
+
+[source]
+----
+fatal: [dragonfly#.local]: FAILED! => {"changed": false, "msg": "'/usr/bin/apt-get upgrade --with-new-pkgs ' failed: E: Could not get lock /var/lib/dpkg/lock-frontend. It is held by process 2551 (unattended-upgr)\nE: Unable to acquire the dpkg frontend lock (/var/lib/dpkg/lock-frontend), is another process using it?\n", "rc": 100, "stdout": "", "stdout_lines": []}
+
+----
+
+= Install Mission Planner on Windows
+https://ardupilot.org/planner/docs/mission-planner-installation.html
+
+Connect Pixhawk to computer via USB cable
+
+Flash Arducopter firmware and restart
+
+Copy initial parameters from another Dragonfly and restart
+
+
+Verify battery voltage.  If the battery voltage is too low (11V?) then you may need to recopy in the initial parameters.
+
+Without propellers installed, perform a motor test.  Verify correct motor orientation and spin (reference above figure)
+
+= Install Mission Planner on Linux (Currently broken)
+Make sure exicute from inside a sub directory
+[source,bash]
+----
+sudo apt install mono-runtime libmono-system-windows-forms4.0-cil libmono-system-core4.0-cil libmono-system-management4.0-cil libmono-system-xml-linq4.0-cil
+sudo apt install mono-complete
+wget https://firmware.ardupilot.org/Tools/MissionPlanner/MissionPlanner-latest.zip
+unzip MissionPlanner-latest.zip
+mono MissionPlanner.exe
+----
+
+= Transmitters
+## Download the companion applicaiton
+https://www.open-tx.org/downloads click the most recent at the top then scroll to the bottom and under `Download links:` click the appropriate installer for your system. 
+
+== Download the SD card image
+https://downloads.open-tx.org/2.3/release/sdcard/opentx-t16/
+
+== Verify a usb connection with the transmitter
+Plug in the transmitter's micro usb if you are running linux run `lsusb | grep "DFU Mode"` to verify it has come up properly if not disassemble and inspect/reseat the ribbon cable
+If all is good you should see this `Bus 001 Device 036: ID 0483:df11 STMicroelectronics STM Device in DFU Mode`
+
+== Install the downloaded opentx companion applicaiton
+add the radio profile 
+Radio type: Jumper T16
+We have a mixture of radios so if the antenna is on the upper front then select `internalmulti` if there is the module installed below don't have it selected.
+You can select `noheli` as we are running quads nto helicopters.
+
+On the leftside make sure to download a copy of the original firmware and save it.
+Make sure to click `show details` and read as you will get a `Flashing done` message even when it fails
+
+Then `Write Firmware to radio` again make sure that the `show details` checkbox is checked and read the output to make sure the flashing completed
+
+Unplug the transmitter and remove the sd card, make a copy of its contents, wipe it clean and then write to it the extracted files from what you downloaded in part `Download the SD card image`
+
+Reinstall the SD card and power up the transmitter and calibrate the analogs
+
+=== External antenna module
+In the case of TX1 it does not have an internal module and the external module was running an old bootloader that did not support upgrading the firmware from the transmitter.
+So Plug directly into the external module's USB micro at the bottom the the transmitter and plug into a linux system
+Run `lsusb` you should see something like `Bus 001 Device 045: ID 10c4:ea60 Silicon Labs CP210x UART Bridge`
+
+Download the module's new firmware
+https://github.com/pascallanger/DIY-Multiprotocol-TX-Module/releases/download/v1.3.3.7/mm-stm-serial-reta-v1.3.3.7.bin
+For a current list go to 
+https://downloads.multi-module.org/
+
+==== Install Flash multi
+Fallow the instructions on
+https://github.com/benlye/flash-multi/blob/master/doc/Linux.md
+
+You'll end up running something like
+
+[source,bash]
+----
+wget https://github.com/benlye/flash-multi/releases/download/0.6.1/flash-multi-0.6.0.tar.gz
+tar -xvzf flash-multi-0.6.0.tar.gz
+cd flash-multi-0.6.0
+sudo ./tools/install.sh
+sudo cp -v ./tools/45-maple.rules /etc/udev/rules.d/45-maple.rules
+sudo chown root:root /etc/udev/rules.d/45-maple.rules
+sudo chmod 644 /etc/udev/rules.d/45-maple.rules
+sudo udevadm control --reload-rules
+sudo usermod -a -G plugdev $USER\nsudo usermod -a -G dialout $USER
+----
+`./flash-multi -f /home/carter/Downloads/mm-stm-serial-reta-v1.3.3.7.bin -p /dev/ttyUSB0`
+
+Once you are running a more modern bootloader on the external module you can update the using the transmitter
+Just copy the bin file to the onboard SD card and fallow this
+https://www.multi-module.org/using-the-module/firmware-updates/update-methods#opentx
+
+== Rebind the transmitter to the dragonflys
+Hit the "MDL" button, then roll the right roller to the right until you get to Internal(or External) RF got to mode change to `MULTI`, the next option change to `FrSky X` then the next selection to `D16 8ch` press the wheel for enter/continue
+Then change the receiver number to match the dragonfly's # and then select bind, the transmitter should beep. While you are doing this power up the dragonfly and while doing so have the small button the on the X8R depressed.
+then power cycle both the dragonfly and the transmitter you should have a solid green light on the X8R receiver if not try again
+
+== Disable inactivity alarm 
+Sys press the page button until you are on the Radio setup tab then scroll down to alarms and set inactivity to `0m`
